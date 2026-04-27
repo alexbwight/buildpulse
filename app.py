@@ -1,18 +1,23 @@
 from flask import Flask, request, redirect
-import sqlite3
 import os
 import secrets
 import re
 from datetime import datetime
+import psycopg2
+import psycopg2.extras
 
 app = Flask(__name__)
-DB_NAME = "buildpulse.db"
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 def get_db():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if DATABASE_URL:
+        return psycopg2.connect(
+            DATABASE_URL,
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+
+    raise Exception("DATABASE_URL is not set")
 
 
 def init_db():
@@ -21,7 +26,7 @@ def init_db():
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             slug TEXT UNIQUE NOT NULL,
             owner_key TEXT NOT NULL,
@@ -31,19 +36,19 @@ def init_db():
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id INTEGER NOT NULL,
+            id SERIAL PRIMARY KEY,
+            project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
             rating INTEGER,
             confusing TEXT,
             useless TEXT,
             missing TEXT,
             use_again TEXT,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(project_id) REFERENCES projects(id)
+            created_at TEXT NOT NULL
         )
     """)
 
     conn.commit()
+    cur.close()
     conn.close()
 
 
@@ -70,11 +75,12 @@ def home():
         cur = conn.cursor()
 
         cur.execute(
-            "INSERT INTO projects (name, slug, owner_key, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO projects (name, slug, owner_key, created_at) VALUES (%s, %s, %s, %s)",
             (project_name, slug, owner_key, datetime.utcnow().isoformat())
         )
 
         conn.commit()
+        cur.close()
         conn.close()
 
         return redirect(f"/created/{slug}?key={owner_key}")
@@ -131,12 +137,11 @@ def feedback_page(slug):
     conn = get_db()
     cur = conn.cursor()
 
-    project = cur.execute(
-        "SELECT * FROM projects WHERE slug = ?",
-        (slug,)
-    ).fetchone()
+    cur.execute("SELECT * FROM projects WHERE slug = %s", (slug,))
+    project = cur.fetchone()
 
     if not project:
+        cur.close()
         conn.close()
         return render_page("<div class='card'><h2>Project not found</h2></div>")
 
@@ -150,7 +155,7 @@ def feedback_page(slug):
         cur.execute("""
             INSERT INTO feedback
             (project_id, rating, confusing, useless, missing, use_again, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             project["id"],
             rating,
@@ -162,6 +167,7 @@ def feedback_page(slug):
         ))
 
         conn.commit()
+        cur.close()
         conn.close()
 
         return render_page(f"""
@@ -171,6 +177,7 @@ def feedback_page(slug):
             </div>
         """)
 
+    cur.close()
     conn.close()
 
     return render_page(f"""
@@ -217,24 +224,26 @@ def dashboard(slug):
     conn = get_db()
     cur = conn.cursor()
 
-    project = cur.execute(
-        "SELECT * FROM projects WHERE slug = ?",
-        (slug,)
-    ).fetchone()
+    cur.execute("SELECT * FROM projects WHERE slug = %s", (slug,))
+    project = cur.fetchone()
 
     if not project:
+        cur.close()
         conn.close()
         return render_page("<div class='card'><h2>Project not found</h2></div>")
 
     if key != project["owner_key"]:
+        cur.close()
         conn.close()
         return render_page("<div class='card'><h2>Unauthorized</h2><p>Invalid dashboard key.</p></div>")
 
-    feedback_items = cur.execute(
-        "SELECT * FROM feedback WHERE project_id = ? ORDER BY id DESC",
+    cur.execute(
+        "SELECT * FROM feedback WHERE project_id = %s ORDER BY id DESC",
         (project["id"],)
-    ).fetchall()
+    )
+    feedback_items = cur.fetchall()
 
+    cur.close()
     conn.close()
 
     if not feedback_items:
@@ -569,7 +578,7 @@ button, .button-link {{
             <div class="logo-icon">💬</div>
             BuildPulse
         </div>
-        <div class="nav-pill">No login MVP</div>
+        <div class="nav-pill">PostgreSQL MVP</div>
     </div>
 
     {content}
