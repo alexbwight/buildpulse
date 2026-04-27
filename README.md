@@ -49,23 +49,19 @@ Flow:
 
 - Python
 - Flask
-- SQLite
+- PostgreSQL
+- psycopg2
 - HTML/CSS
 - Render
 - GitHub
 
 ## Status
 
-Early MVP. Built to test whether makers need a simple way to collect structured feedback.
-
-## Important Note
-
-This MVP currently uses SQLite. On some free hosting setups, data may not persist permanently after redeploys or restarts. A future version should use PostgreSQL.
+Early MVP. Uses PostgreSQL for persistent feedback storage.
 
 ## Future Ideas
 
 - Real user accounts
-- Persistent PostgreSQL database
 - Better dashboard analytics
 - Export feedback to CSV
 - Email notifications
