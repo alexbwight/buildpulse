@@ -6,6 +6,16 @@ A simple no-login feedback collector for side projects.
 
 https://buildpulse-y2h5.onrender.com
 
+## Screenshots
+
+### Homepage
+
+![BuildPulse Homepage](screenshots/buildpulse-home.png)
+
+### Feedback Dashboard
+
+![BuildPulse Dashboard](screenshots/buildpulse-dashboard.png)
+
 ## What it does
 
 BuildPulse lets makers create a feedback page for their project, share the public link, and collect structured feedback in a private dashboard.
