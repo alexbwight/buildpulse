@@ -1,10 +1,12 @@
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, Response
 import os
 import secrets
 import re
 from datetime import datetime
 import psycopg2
 import psycopg2.extras
+import csv
+import io
 
 app = Flask(__name__)
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -278,6 +280,7 @@ def dashboard(slug):
         feedback_html = cards
 
     public_link = request.host_url.rstrip("/") + f"/p/{slug}"
+    export_link = request.host_url.rstrip("/") + f"/export/{slug}?key={key}"
 
     return render_page(f"""
         <div class="dashboard-header">
@@ -286,6 +289,7 @@ def dashboard(slug):
                 <h2>{project["name"]}</h2>
                 <p class="muted">Public feedback link:</p>
                 <div class="linkbox">{public_link}</div>
+                <a class="button-link" href="{export_link}">Export CSV</a>
             </div>
         </div>
 
@@ -298,6 +302,74 @@ def dashboard(slug):
 
         {feedback_html}
     """)
+
+
+@app.route("/export/<slug>")
+def export_feedback(slug):
+    key = request.args.get("key", "")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM projects WHERE slug = %s", (slug,))
+    project = cur.fetchone()
+
+    if not project:
+        cur.close()
+        conn.close()
+        return render_page("<div class='card'><h2>Project not found</h2></div>")
+
+    if key != project["owner_key"]:
+        cur.close()
+        conn.close()
+        return render_page("<div class='card'><h2>Unauthorized</h2><p>Invalid dashboard key.</p></div>")
+
+    cur.execute(
+        """
+        SELECT rating, confusing, useless, missing, use_again, created_at
+        FROM feedback
+        WHERE project_id = %s
+        ORDER BY id DESC
+        """,
+        (project["id"],)
+    )
+
+    feedback_items = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "rating",
+        "confusing",
+        "useless_or_unnecessary",
+        "missing",
+        "would_use_again",
+        "created_at"
+    ])
+
+    for item in feedback_items:
+        writer.writerow([
+            item["rating"],
+            item["confusing"],
+            item["useless"],
+            item["missing"],
+            item["use_again"],
+            item["created_at"]
+        ])
+
+    filename = f"{project['slug']}-feedback.csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
 
 
 def render_page(content):
