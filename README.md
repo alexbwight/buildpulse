@@ -33,6 +33,7 @@ It is designed for early-stage builders who need honest feedback on what is conf
 - No login MVP
 - SQLite database
 - Mobile-friendly UI
+- Export feedback to CSV
 
 ## Example Use Case
 
