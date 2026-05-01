@@ -1,0 +1,16 @@
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local files
+instance/
